@@ -8,8 +8,9 @@ from .models import Project, Task
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 
+@ensure_csrf_cookie
 def index(request: HttpRequest):
-    """Serve the single-page Vue frontend container."""
+    """Serve the single-page Vue frontend and set CSRF cookie."""
     return render(request, "projects/index.html")
 
 
@@ -28,7 +29,6 @@ def _bad_request(message: str) -> JsonResponse:
     return JsonResponse({"error": message}, status=400)
 
 
-@csrf_exempt
 def projects_collection(request: HttpRequest) -> JsonResponse:
     """
     GET: return list of projects.
@@ -59,7 +59,6 @@ def projects_collection(request: HttpRequest) -> JsonResponse:
     return HttpResponseNotAllowed(["GET", "POST"])
 
 
-@csrf_exempt
 def project_resource(request: HttpRequest, project_id: int) -> JsonResponse:
     """
     GET: return a single project including its tasks.
@@ -101,7 +100,6 @@ def project_resource(request: HttpRequest, project_id: int) -> JsonResponse:
     return HttpResponseNotAllowed(["GET", "PUT", "DELETE"])
 
 
-@csrf_exempt
 def project_tasks_collection(request: HttpRequest, project_id: int) -> JsonResponse:
     """
     GET: list tasks under a project.
@@ -134,8 +132,6 @@ def project_tasks_collection(request: HttpRequest, project_id: int) -> JsonRespo
 
     return HttpResponseNotAllowed(["GET", "POST"])
 
-
-@csrf_exempt
 def task_resource(request: HttpRequest, task_id: int) -> JsonResponse:
     """
     PUT: update a task.
