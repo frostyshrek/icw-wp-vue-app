@@ -1,28 +1,363 @@
+{% load static %}
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>Projects & Tasks</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Bootstrap CSS (CDN) -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Vue 3 (CDN, Options API fine) -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    body { padding-top: 2rem; padding-bottom: 2rem; }
+  </style>
 </head>
-<body class="p-3">
-  <div id="app" class="container">
-    <h1 class="h3 mb-3">Django + Vue Ajax API</h1>
-    <p class="text-muted">Scaffold ready. We'll build components next.</p>
+<body>
+<div id="app" class="container">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Projects</h1>
+    <button class="btn btn-primary" @click="openProjectModal()">New Project</button>
   </div>
 
-  <!-- Bootstrap JS -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <div class="accordion" id="projectsAccordion">
+    <project-item
+      v-for="proj in projects"
+      :key="proj.id"
+      :project="proj"
+      :accordion-id="'projectsAccordion'"
+      :item-id="'proj-' + proj.id"
+      @update-project="updateProject"
+      @delete-project="deleteProject"
+      @update-task="updateTask"
+      @delete-task="deleteTask"
+      @create-task="createTask"
+    ></project-item>
 
-  <script>
-    const app = Vue.createApp({
-      data() { return { ready: true } }
-    });
-    app.mount('#app');
-  </script>
+    <div v-if="projects.length === 0" class="text-muted">No projects yet. Add one!</div>
+  </div>
+
+  <div class="modal fade" id="projectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <form class="modal-content" @submit.prevent="submitProject">
+        <div class="modal-header">
+          <h5 class="modal-title">[[ projectForm.id ? 'Edit Project' : 'New Project' ]]</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" @click="resetProjectForm"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label">Name</label>
+            <input v-model="projectForm.name" class="form-control" required maxlength="120">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Description</label>
+            <textarea v-model="projectForm.description" class="form-control"></textarea>
+          </div>
+          <div class="row g-2">
+            <div class="col-md-6">
+              <label class="form-label">Start date</label>
+              <input type="date" v-model="projectForm.start_date" class="form-control" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Priority</label>
+              <input type="number" v-model.number="projectForm.priority" class="form-control" min="1" required>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" v-model="projectForm.active" id="activeCheck">
+                <label class="form-check-label" for="activeCheck">Active</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" type="button" data-bs-dismiss="modal" @click="resetProjectForm">Cancel</button>
+          <button class="btn btn-primary" type="submit">[[ projectForm.id ? 'Save' : 'Create' ]]</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<script type="text/x-template" id="project-item-tpl">
+  <div class="accordion-item mb-2">
+    <h2 class="accordion-header" :id="`heading-${itemId}`">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+              :data-bs-target="`#collapse-${itemId}`" aria-expanded="false" :aria-controls="`collapse-${itemId}`">
+        <div class="d-flex w-100 justify-content-between align-items-center">
+          <div>
+            <strong>[[ project.name ]]</strong>
+            <span class="badge bg-secondary ms-2">Priority [[ project.priority ]]</span>
+            <span class="badge ms-1" :class="project.active ? 'bg-success' : 'bg-outline-secondary'">
+              [[ project.active ? 'Active' : 'Inactive' ]]
+            </span>
+          </div>
+          <div class="ms-2">
+            <button class="btn btn-sm btn-outline-primary me-1" @click.stop="openEditProject()">Edit</button>
+            <button class="btn btn-sm btn-outline-danger" @click.stop="confirmDeleteProject()">Delete</button>
+          </div>
+        </div>
+      </button>
+    </h2>
+    <div :id="`collapse-${itemId}`" class="accordion-collapse collapse" :aria-labelledby="`heading-${itemId}`"
+         :data-bs-parent="`#${accordionId}`">
+      <div class="accordion-body">
+        <p class="mb-2 text-muted">[[ project.description ]]</p>
+        <p class="mb-3"><small>Start: [[ project.start_date ]]</small></p>
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Tasks</h6>
+          <button class="btn btn-sm btn-primary" @click="openTaskModal()">Add Task</button>
+        </div>
+
+        <ul class="list-group">
+          <task-item
+            v-for="t in project.tasks || []"
+            :key="t.id"
+            :task="t"
+            @update-task="$emit('update-task', t, project)"
+            @delete-task="$emit('delete-task', t, project)"
+          ></task-item>
+          <li v-if="!project.tasks || project.tasks.length === 0" class="list-group-item text-muted">
+            No tasks yet.
+          </li>
+        </ul>
+
+        <div class="modal fade" :id="`taskModal-${itemId}`" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog">
+            <form class="modal-content" @submit.prevent="submitTask">
+              <div class="modal-header">
+                <h5 class="modal-title">[[ taskForm.id ? 'Edit Task' : 'New Task' ]]</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" @click="resetTaskForm"></button>
+              </div>
+              <div class="modal-body">
+                <div class="mb-2">
+                  <label class="form-label">Title</label>
+                  <input v-model="taskForm.title" class="form-control" required maxlength="200">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Notes</label>
+                  <textarea v-model="taskForm.notes" class="form-control"></textarea>
+                </div>
+                <div class="row g-2">
+                  <div class="col-md-6">
+                    <label class="form-label">Due date</label>
+                    <input type="date" v-model="taskForm.due_date" class="form-control" required>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">Est. hours</label>
+                    <input type="number" v-model.number="taskForm.estimate_hours" class="form-control" min="0" required>
+                  </div>
+                  <div class="col-md-3 d-flex align-items-end">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" v-model="taskForm.completed" :id="`completed-${itemId}`">
+                      <label class="form-check-label" :for="`completed-${itemId}`">Done</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-secondary" type="button" data-bs-dismiss="modal" @click="resetTaskForm">Cancel</button>
+                <button class="btn btn-primary" type="submit">[[ taskForm.id ? 'Save' : 'Create' ]]</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</script>
+
+<script type="text/x-template" id="task-item-tpl">
+  <li class="list-group-item d-flex justify-content-between align-items-center">
+    <div>
+      <div>
+        <strong :class="task.completed ? 'text-decoration-line-through' : ''">[[ task.title ]]</strong>
+        <span class="badge bg-light text-dark ms-2">Due [[ task.due_date ]]</span>
+        <span class="badge bg-secondary ms-1">[[ task.estimate_hours ]]h</span>
+      </div>
+      <small class="text-muted">[[ task.notes ]]</small>
+    </div>
+    <div>
+      <button class="btn btn-sm btn-outline-primary me-1" @click="$emit('update-task', task)">Edit</button>
+      <button class="btn btn-sm btn-outline-danger" @click="$emit('delete-task', task)">Delete</button>
+    </div>
+  </li>
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  function getCookie(name) {
+    const value = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return value ? value.pop() : '';
+  }
+  const csrftoken = getCookie('csrftoken');
+
+  const TaskItem = { template: "#task-item-tpl", props: ["task"] };
+
+  const ProjectItem = {
+    template: "#project-item-tpl",
+    props: ["project", "accordionId", "itemId"],
+    components: { TaskItem },
+    data() {
+      return { taskForm: this.emptyTask() };
+    },
+    methods: {
+      emptyTask() {
+        const today = new Date().toISOString().slice(0,10);
+        return { id:null, title:"", notes:"", due_date:today, completed:false, estimate_hours:1 };
+      },
+      openEditProject() { this.$emit('update-project', this.project); },
+      confirmDeleteProject() { this.$emit('delete-project', this.project); },
+
+      openTaskModal() {
+        this.resetTaskForm();
+        const el = document.getElementById(`taskModal-${this.itemId}`);
+        bootstrap.Modal.getOrCreateInstance(el).show();
+      },
+      resetTaskForm() { this.taskForm = this.emptyTask(); },
+
+      async submitTask() {
+        const el = document.getElementById(`taskModal-${this.itemId}`);
+        const modal = bootstrap.Modal.getOrCreateInstance(el);
+        try {
+          const resp = await fetch(`/api/projects/${this.project.id}/tasks/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-CSRFToken": csrftoken },
+            body: JSON.stringify(this.taskForm)
+          });
+          if (!resp.ok) throw new Error("Failed to create task");
+          const data = await resp.json();
+          this.project.tasks = this.project.tasks || [];
+          this.project.tasks.push(data.task);
+          modal.hide();
+          this.resetTaskForm();
+        } catch (e) {
+          alert(e.message);
+        }
+      },
+    }
+  };
+
+  const app = Vue.createApp({
+    components: { ProjectItem, TaskItem },
+    data() {
+      const today = new Date().toISOString().slice(0,10);
+      return {
+        projects: [],
+        projectForm: { id:null, name:"", description:"", start_date:today, active:true, priority:1 },
+      };
+    },
+    mounted() { this.fetchProjects(); },
+    methods: {
+      openProjectModal(project=null) {
+        if (project) this.projectForm = { ...project };
+        else {
+          const today = new Date().toISOString().slice(0,10);
+          this.projectForm = { id:null, name:"", description:"", start_date:today, active:true, priority:1 };
+        }
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('projectModal')).show();
+      },
+      resetProjectForm() {
+        const today = new Date().toISOString().slice(0,10);
+        this.projectForm = { id:null, name:"", description:"", start_date:today, active:true, priority:1 };
+      },
+
+      async fetchProjects() {
+        try {
+          const resp = await fetch("/api/projects/");
+          const data = await resp.json();
+          const detailed = await Promise.all(data.projects.map(async p => {
+            const r = await fetch(`/api/projects/${p.id}/`);
+            const d = await r.json();
+            return d.project;
+          }));
+          this.projects = detailed;
+        } catch (e) {
+          console.error(e); alert("Failed to load projects");
+        }
+      },
+
+      async submitProject() {
+        try {
+          const isEdit = !!this.projectForm.id;
+          const url = isEdit ? `/api/projects/${this.projectForm.id}/` : "/api/projects/";
+          const method = isEdit ? "PUT" : "POST";
+          const resp = await fetch(url, {
+            method,
+            headers: { "Content-Type": "application/json", "X-CSRFToken": csrftoken },
+            body: JSON.stringify({
+              name: this.projectForm.name,
+              description: this.projectForm.description,
+              start_date: this.projectForm.start_date,
+              active: this.projectForm.active,
+              priority: this.projectForm.priority
+            })
+          });
+          if (!resp.ok) throw new Error("Save failed");
+          const data = await resp.json();
+          if (isEdit) {
+            this.projects = this.projects.map(p => p.id === data.project.id ? { ...p, ...data.project } : p);
+          } else {
+            this.projects.unshift({ ...data.project, tasks: [] });
+          }
+          bootstrap.Modal.getOrCreateInstance(document.getElementById('projectModal')).hide();
+          this.resetProjectForm();
+        } catch (e) { alert(e.message); }
+      },
+      updateProject(project) { this.openProjectModal(project); },
+
+      async deleteProject(project) {
+        if (!confirm(`Delete project "${project.name}"?`)) return;
+        try {
+          const resp = await fetch(`/api/projects/${project.id}/`, {
+            method: "DELETE",
+            headers: { "X-CSRFToken": csrftoken }
+          });
+          if (![200,204].includes(resp.status)) throw new Error("Delete failed");
+          this.projects = this.projects.filter(p => p.id !== project.id);
+        } catch (e) { alert(e.message); }
+      },
+
+      async updateTask(task, project) {
+        const title = prompt("Task title:", task.title); if (title === null) return;
+        const notes = prompt("Notes:", task.notes ?? ""); if (notes === null) return;
+        const due = prompt("Due date (YYYY-MM-DD):", task.due_date); if (due === null) return;
+        const est = prompt("Estimate hours (int):", task.estimate_hours); if (est === null) return;
+        const completed = confirm("Mark as completed? OK=yes / Cancel=no");
+
+        try {
+          const resp = await fetch(`/api/tasks/${task.id}/`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", "X-CSRFToken": csrftoken },
+            body: JSON.stringify({ title, notes, due_date: due, estimate_hours: parseInt(est,10), completed })
+          });
+          if (!resp.ok) throw new Error("Update failed");
+          const data = await resp.json();
+          project.tasks = project.tasks.map(t => t.id === data.task.id ? data.task : t);
+        } catch (e) { alert(e.message); }
+      },
+      async deleteTask(task, project) {
+        if (!confirm(`Delete task "${task.title}"?`)) return;
+        try {
+          const resp = await fetch(`/api/tasks/${task.id}/`, {
+            method: "DELETE",
+            headers: { "X-CSRFToken": csrftoken }
+          });
+          if (![200,204].includes(resp.status)) throw new Error("Delete failed");
+          project.tasks = project.tasks.filter(t => t.id !== task.id);
+        } catch (e) { alert(e.message); }
+      },
+      async createTask() { /* handled inside ProjectItem modal */ },
+    }
+  });
+
+  app.config.compilerOptions.delimiters = ['[[', ']]'];
+  app.component("project-item", ProjectItem);
+  app.component("task-item", TaskItem);
+  app.mount("#app");
+</script>
 </body>
 </html>

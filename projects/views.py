@@ -5,6 +5,7 @@ from django.shortcuts import render, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.core.exceptions import ValidationError
 from .models import Project, Task
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 
 def index(request: HttpRequest):
